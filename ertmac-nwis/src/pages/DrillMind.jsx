@@ -34,6 +34,12 @@ const getRawDocumentId = (corpusId) => parseInt(corpusId.split("-").pop(), 10);
 // returns to it instead of always starting fresh.
 const CONVERSATIONS_KEY = "drillmind_conversations";
 const ACTIVE_ID_KEY = "drillmind_active_conversation_id";
+// The not-yet-sent text sitting in the input box. Without this, navigating
+// to another page unmounts DrillMind entirely (plain React Router routing,
+// no keep-alive), which reset the "message" useState back to "" - so
+// half-typed questions were silently lost just by clicking Dashboard and
+// coming back. Persisted the same way conversations already are.
+const DRAFT_KEY = "drillmind_draft_message";
 // Where chat history lived before conversations existed (a single running
 // log) - read once below to migrate anything already saved there into a
 // real conversation, so switching to this model doesn't erase history.
@@ -104,8 +110,19 @@ function loadInitialState() {
   return { conversations: [fresh], activeId: fresh.id };
 }
 
+// Reads back whatever draft text was sitting in the input box last time this
+// page was open. Wrapped in try/catch for the same reasons as
+// loadInitialState above (private browsing, blocked storage, etc.).
+function loadDraftMessage() {
+  try {
+    return localStorage.getItem(DRAFT_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
 function DrillMind() {
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(loadDraftMessage);
   // Which conversation currently has a reply in flight (null = none) -
   // NOT a plain boolean. A plain "sending" flag shared across every
   // conversation caused a real bug found by testing: starting a New Chat
@@ -153,6 +170,19 @@ function DrillMind() {
       // just won't persist. Not worth interrupting the user over.
     }
   }, [conversations, activeId]);
+
+  // Persists the current draft on every keystroke, so it survives navigating
+  // to another page and back. Cleared automatically once the draft becomes
+  // "" (message sent, New Chat, or switching conversations all already
+  // call setMessage("")), so a stale draft never resurfaces in the wrong
+  // conversation.
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, message);
+    } catch {
+      // Storage full/blocked - same as above, not worth interrupting over.
+    }
+  }, [message]);
 
   // Applies an update function to one specific conversation's messages (by
   // id, not "whatever's active right now" - see sendMessage below for why

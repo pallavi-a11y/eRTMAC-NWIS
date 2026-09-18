@@ -65,6 +65,22 @@ _SEPARATOR_CELL_RE = re.compile(r"^[:\-]*$")
 # gets excluded.
 _MIN_ROW_FILL_RATIO = 0.5
 
+# A row with far MORE cells than the header is just as untrustworthy as one
+# with far fewer, and was NOT being caught before this existed - found as a
+# real bug against document_id=1000017 page 2: a long flat list of schema
+# field names ("well_id | latitude | longitude | ...") got line-wrapped by
+# the source PDF across several print lines, and one of those wrapped lines
+# alone had 12 cells against a 4-cell header. Nothing rejected it, so
+# _flush's width = max(len(r) for every row) ballooned the WHOLE table to
+# 12 columns, padding the real header out with 8 empty trailing cells and
+# scrambling every other row into columns that didn't correspond to
+# anything - not a wide real table, just wrapped prose that happens to
+# contain "|" characters as a list separator. 1.5 mirrors _MIN_ROW_FILL_RATIO's
+# tolerance for a row a little off from the header, while still catching a
+# row that is 2-3x wider, which no genuine ragged-row case in real data has
+# produced.
+_MAX_ROW_FILL_RATIO = 1.5
+
 # Deliberately stricter than _MIN_ROW_FILL_RATIO above - see its use at the
 # blank-line-inside-a-run check for why crossing a gap needs a closer column
 # match than merely tolerating one ragged row does.
@@ -119,6 +135,35 @@ def _header_looks_like_key_value(headers: List[str]) -> bool:
         return False
     kv_like = sum(1 for h in headers if _KV_CELL_RE.match(h.strip()))
     return kv_like / len(headers) >= _MIN_KV_HEADER_RATIO
+
+
+_FIELD_NAME_CELL_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+_MIN_FIELD_NAME_RATIO = 0.7
+
+
+def _looks_like_flat_field_list(header: List[str], rows: List[List[str]]) -> bool:
+    """
+    True when most of the table's cells - header AND data rows alike - are
+    themselves bare identifier-style field names (e.g. "mud_weight_sg",
+    "well_location", "NPT") rather than a real header/data split - found as
+    a real bug (document_id=1000017 page 2's "AI-READY STRUCTURED STRING"
+    block): a long flat list of schema field names, wrapped by the source
+    PDF across several print lines that each happened to contain "|"
+    characters, was detected as a table whose "data rows" were just MORE
+    field names, not actual values (numbers, dates, short prose) - a real
+    table's data rows look different in kind from its header; this one's
+    rows look identical to it. This is the sibling of
+    _header_looks_like_key_value above (same flat-list-mistaken-for-a-grid
+    root cause, different concrete shape), checked across every populated
+    cell in the table rather than just the header, since the header alone
+    here ("well_id", "latitude", "longitude") looks like a perfectly
+    plausible column-label row on its own - only checking the data rows too
+    reveals they are not values, they are more labels."""
+    all_cells = [c for c in header if c.strip()] + [c for row in rows for c in row if c.strip()]
+    if not all_cells:
+        return False
+    field_like = sum(1 for c in all_cells if _FIELD_NAME_CELL_RE.match(c.strip()))
+    return field_like / len(all_cells) >= _MIN_FIELD_NAME_RATIO
 
 
 def _trim_trailing_fragment_rows(indexed_rows: List[tuple]) -> List[tuple]:
@@ -216,7 +261,12 @@ def extract_tables(page_text: Optional[str]) -> List[Dict]:
                 # SOMEWHERE), not be silently dropped just because it used
                 # to be inside this table's line range.
                 end_line = body[-1][0] if body else header_line
-                if rows and not _column_always_empty(rows) and not _header_looks_like_key_value(header):
+                if (
+                    rows
+                    and not _column_always_empty(rows)
+                    and not _header_looks_like_key_value(header)
+                    and not _looks_like_flat_field_list(header, rows)
+                ):
                     tables.append(
                         {
                             "start_line": start_line,
@@ -232,15 +282,19 @@ def extract_tables(page_text: Optional[str]) -> List[Dict]:
             cells = _split_row(line)
             if current_run and not _is_separator_row(cells):
                 header_width = len(current_run[0][1])
-                if header_width and len(cells) < header_width * _MIN_ROW_FILL_RATIO:
-                    # Missing most of its columns - not trustworthy as a row
-                    # of THIS table. Skip it WITHOUT flushing (the run, and
-                    # its header, stay open) so a later well-formed row can
-                    # still join the same table. Flushing here instead was
-                    # tried first and rejected: it let the very next ragged
-                    # row become a fresh "header" for a new table, which just
-                    # relocated the scrambled-column problem into a table
-                    # header cell instead of actually fixing it.
+                if header_width and (
+                    len(cells) < header_width * _MIN_ROW_FILL_RATIO
+                    or len(cells) > header_width * _MAX_ROW_FILL_RATIO
+                ):
+                    # Missing most of its columns, OR far more of them than
+                    # the header has - not trustworthy as a row of THIS
+                    # table either way. Skip it WITHOUT flushing (the run,
+                    # and its header, stay open) so a later well-formed row
+                    # can still join the same table. Flushing here instead
+                    # was tried first and rejected: it let the very next
+                    # ragged row become a fresh "header" for a new table,
+                    # which just relocated the scrambled-column problem into
+                    # a table header cell instead of actually fixing it.
                     continue
             current_run.append((i, cells))
         elif line.strip() == "" and current_run:

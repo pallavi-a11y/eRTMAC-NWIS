@@ -639,21 +639,26 @@ Scan quality may be poor - some characters may be missing, faded, or corrupted.
    dense, repetitive, or hard to read. Do not stop early or summarize instead
    of transcribing; an incomplete transcription is worse than a slow one.
    BEFORE you finish, look at the ENTIRE page one more time and check for any
-   table, chart, or diagram BELOW the prose paragraphs you have already
-   transcribed - a page finishing with a complete, well-formed paragraph is
-   NOT a sign you are done; many pages have one or more tables or charts
-   after the prose, and you must transcribe every one of them too, not stop
-   once the prose reads as complete. If a chart or diagram has a caption or
-   title, include that caption in your transcription even if you cannot
-   transcribe the chart's plotted data itself.
-   If you see ANY table, form, or grid on the page - including a simple
-   two-column "label / value" layout (e.g. a document header block with rows
-   like "Well status: Shut-in", "Total depth: 2,140 m") - you MUST put each
-   row on its own line and separate every column with a "|" character, for
-   example: "Well status | Shut-in" on one line, "Total depth | 2,140 m" on
-   the next line. Do NOT merge multiple table/form rows into a single
-   run-on sentence - every distinct row in the image must become its own
-   line in your output, even if that makes the transcription longer. If
+   table BELOW the prose paragraphs you have already transcribed - a page
+   finishing with a complete, well-formed paragraph is NOT a sign you are
+   done; many pages have one or more tables after the prose, and you must
+   transcribe every one of them too, not stop once the prose reads as complete.
+   A chart, graph, plot, or diagram (anything with plotted lines, bars, axes,
+   or a legend, rather than rows of labeled text) is captured separately as
+   an image and is NOT part of your job - do not transcribe its plotted data,
+   its axis labels/gridlines, or attempt to describe it, and do NOT treat its
+   axes or gridlines as a table. Skip straight past it and continue
+   transcribing whatever real text (prose or tables) comes after it on the
+   page. Only its caption/title text, if present as actual printed text near
+   it, belongs in your transcription - as a plain line, not a table row.
+   If you see ANY table or form made of actual printed text - including a
+   simple two-column "label / value" layout (e.g. a document header block
+   with rows like "Well status: Shut-in", "Total depth: 2,140 m") - you MUST
+   put each row on its own line and separate every column with a "|"
+   character, for example: "Well status | Shut-in" on one line, "Total depth
+   | 2,140 m" on the next line. Do NOT merge multiple table/form rows into a
+   single run-on sentence - every distinct row in the image must become its
+   own line in your output, even if that makes the transcription longer. If
    there are multiple separate tables on the page, transcribe ALL of them,
    not just the first one.
 2. Identify any Non-Productive Time (NPT) hazards mentioned on this page

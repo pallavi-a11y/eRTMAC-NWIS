@@ -5,7 +5,8 @@ pydantic==2.9.2
  
 pypdfium2==4.30.0
 Pillow==10.4.0
- 
+opencv-python-headless==5.0.0.93
+
 qdrant-client==1.11.3
 sentence-transformers==3.2.1
  

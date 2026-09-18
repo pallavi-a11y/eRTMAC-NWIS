@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -20,6 +20,7 @@ import {
   ChevronRight,
   FileCheck2,
   Layers,
+  Save,
 } from "lucide-react";
 
 import api, { API_BASE_URL } from "../api/client";
@@ -51,6 +52,15 @@ function Corpus() {
   const [pageData, setPageData] = useState(null);
   const [pageLoading, setPageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
+
+  // The OCR text is edited directly in the DOM (contentEditable), not through
+  // React state - same approach as the standalone /review tool this reuses
+  // the save endpoint from. A controlled value would fight the browser's own
+  // cursor/selection handling on every keystroke; instead this ref is only
+  // read from (on save) and only written to (seeding fresh content) below.
+  const ocrEditableRef = useRef(null);
+  const [savingCorrection, setSavingCorrection] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
 
   /* =====================================================
      LOAD REAL DOCUMENTS
@@ -121,6 +131,11 @@ function Corpus() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPageLoading(true);
     setImageError(false);
+    // Cleared here (on an actual page/document change), NOT in the seed
+    // effect below - handleSaveCorrection's own refetch also lands in
+    // pageData, and clearing it there raced with setSaveStatus({ok:true,...})
+    // and immediately erased the "Saved." message before it was ever seen.
+    setSaveStatus(null);
 
     const rawId = getRawDocumentId(selectedDocument.id);
 
@@ -140,6 +155,87 @@ function Corpus() {
       cancelled = true;
     };
   }, [selectedDocument, currentPage]);
+
+  /* =====================================================
+     SEED THE EDITABLE OCR BOX
+     Runs only when a fresh pageData object arrives (a new page/document was
+     fetched) - never on a re-render caused by typing, so it doesn't stomp
+     on in-progress edits. Real <table> markup, not markdown text, same
+     reasoning as the standalone review tool: a plain string can never
+     visually render as a bordered grid.
+  ===================================================== */
+
+  useEffect(() => {
+    if (ocrEditableRef.current && pageData && pageData.rendered_html) {
+      ocrEditableRef.current.innerHTML = pageData.rendered_html;
+    }
+  }, [pageData]);
+
+  // Converts the editable box's current DOM (real <table> elements included)
+  // back into a single plain-text string for saving - the inverse of the
+  // server's render_page_as_html(). A <table> becomes markdown pipe rows
+  // (matching table_parser.py's own format), so re-opening this saved text
+  // still round-trips through the table detector correctly. Ported directly
+  // from routers/review.py's standalone tool so both editors save in the
+  // exact same format.
+  const serializeEditableContent = (container) => {
+    const lines = [];
+    const walk = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (node.textContent) lines.push(node.textContent);
+        return;
+      }
+      if (node.nodeName === "TABLE") {
+        const rows = Array.from(node.querySelectorAll("tr"));
+        rows.forEach((tr, idx) => {
+          const cells = Array.from(tr.children).map((cell) =>
+            cell.textContent.trim()
+          );
+          lines.push("| " + cells.join(" | ") + " |");
+          if (idx === 0) {
+            lines.push("| " + cells.map(() => "---").join(" | ") + " |");
+          }
+        });
+        lines.push("");
+        return;
+      }
+      if (node.nodeName === "BR") {
+        lines.push("");
+        return;
+      }
+      if (typeof node.querySelector === "function" && node.querySelector("table")) {
+        for (const child of node.childNodes) walk(child);
+        return;
+      }
+      const text = node.textContent;
+      if (text) lines.push(text);
+    };
+    for (const child of container.childNodes) walk(child);
+    return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  };
+
+  const handleSaveCorrection = async () => {
+    if (!ocrEditableRef.current || !selectedDocument) return;
+
+    const text = serializeEditableContent(ocrEditableRef.current);
+    const rawId = getRawDocumentId(selectedDocument.id);
+
+    setSavingCorrection(true);
+    setSaveStatus(null);
+
+    try {
+      await api.post(`/api/review/${rawId}/${currentPage}/correction`, { text });
+      // Re-fetch so the "Human-corrected" badge and corrected_text flag
+      // reflect what was actually saved, not an assumed success state.
+      const res = await api.get(`/api/review/${rawId}/${currentPage}`);
+      setPageData(res.data);
+      setSaveStatus({ ok: true, message: "Saved." });
+    } catch {
+      setSaveStatus({ ok: false, message: "Save failed - is the backend running?" });
+    } finally {
+      setSavingCorrection(false);
+    }
+  };
 
   /* =====================================================
      FILTER DOCUMENTS
@@ -1004,12 +1100,16 @@ function Corpus() {
                   ) : pageData && pageData.rendered_html ? (
 
                     // Trusted, server-built HTML (routers/review.py escapes
-                    // every cell on the way in) - same content the review
-                    // tool itself renders directly into the DOM.
+                    // every cell on the way in), seeded imperatively by the
+                    // effect above - editable directly (type in a table cell
+                    // or the surrounding text), same as the standalone
+                    // /review tool. Not a React-controlled value: contentEditable
+                    // fights a controlled value on every keystroke.
                     <div
-                      dangerouslySetInnerHTML={{
-                        __html: pageData.rendered_html,
-                      }}
+                      ref={ocrEditableRef}
+                      className="ocr-editable-content"
+                      contentEditable
+                      suppressContentEditableWarning
                     />
 
                   ) : pageData && pageData.parse_ok === 0 ? (
@@ -1037,6 +1137,33 @@ function Corpus() {
                   )}
 
                 </div>
+
+
+                {pageData && pageData.rendered_html && (
+
+                  <div className="ocr-edit-actions">
+
+                    <button
+                      className="ocr-save-btn"
+                      onClick={handleSaveCorrection}
+                      disabled={savingCorrection}
+                    >
+                      <Save size={13} />
+                      {savingCorrection ? "Saving..." : "Save Correction"}
+                    </button>
+
+                    {saveStatus && (
+                      <span
+                        className="ocr-save-status"
+                        style={{ color: saveStatus.ok ? "#16a34a" : "#dc2626" }}
+                      >
+                        {saveStatus.message}
+                      </span>
+                    )}
+
+                  </div>
+
+                )}
 
 
                 <div className="ocr-footer">

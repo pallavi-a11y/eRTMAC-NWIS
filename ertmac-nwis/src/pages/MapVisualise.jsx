@@ -3,7 +3,7 @@ import {
   MapContainer,
   ImageOverlay,
   Marker,
-  Tooltip,
+  Popup,
   Circle,
   ZoomControl,
   useMap,
@@ -324,16 +324,28 @@ const MapVisualise = () => {
     setRadius(value);
     setShowRadius(true);
 
+    // Centers on whichever well you've actually selected (list click, marker
+    // click, or the Active Well shortcut) - falls back to the map's last
+    // clicked point if one exists, and only reaches for an arbitrary active
+    // well as a last resort when nothing has been picked yet at all. Found
+    // as a real bug: this used to always re-center on wells.find(ACTIVE) -
+    // the SAME well every time regardless of what you'd selected, so "show
+    // me wells around this one" never actually worked for any well other
+    // than whichever happened to be first in the array.
     if (!radiusCenter) {
-      const activeWell = wells.find(
-        (well) => well.status === "ACTIVE" && hasCoords(well)
-      );
+      if (selectedWell && hasCoords(selectedWell)) {
+        setRadiusCenter([selectedWell.lat, selectedWell.lng]);
+      } else {
+        const activeWell = wells.find(
+          (well) => well.status === "ACTIVE" && hasCoords(well)
+        );
 
-      if (activeWell) {
-        setRadiusCenter([
-          activeWell.lat,
-          activeWell.lng,
-        ]);
+        if (activeWell) {
+          setRadiusCenter([
+            activeWell.lat,
+            activeWell.lng,
+          ]);
+        }
       }
     }
   };
@@ -361,6 +373,23 @@ const MapVisualise = () => {
         activeWell.lat,
         activeWell.lng,
       ]);
+    }
+  };
+
+  /* =====================================================
+     SELECT ANY WELL
+     The single entry point for "pick a well" from either the sidebar list
+     or a map marker. If a radius search is already running, moves it to
+     center on whatever well was just picked - so "select any well and see
+     the wells around it" is one click, not select-well-then-separately-
+     re-apply-radius.
+  ===================================================== */
+
+  const selectWell = (well) => {
+    setSelectedWell(well);
+
+    if (showRadius && hasCoords(well)) {
+      setRadiusCenter([well.lat, well.lng]);
     }
   };
 
@@ -782,7 +811,7 @@ const MapVisualise = () => {
                     : ""
                 }`}
                 onClick={() =>
-                  setSelectedWell(well)
+                  selectWell(well)
                 }
               >
 
@@ -916,14 +945,12 @@ const MapVisualise = () => {
                 opacity={dimmed ? 0.28 : 1}
                 eventHandlers={{
                   click: () =>
-                    setSelectedWell(well),
+                    selectWell(well),
                 }}
               >
 
-                <Tooltip
-                  direction="top"
-                  offset={[0, -18]}
-                  opacity={1}
+                <Popup
+                  offset={[0, -14]}
                 >
 
                   <div className="well-popup">
@@ -1020,7 +1047,7 @@ const MapVisualise = () => {
 
                   </div>
 
-                </Tooltip>
+                </Popup>
 
               </Marker>
             );
