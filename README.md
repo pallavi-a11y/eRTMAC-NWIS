@@ -209,29 +209,6 @@ npm run dev
 
 Then open `http://localhost:5173`.
 
-## API reference
-
-All routes are served by the FastAPI backend at `http://localhost:8000`.
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/api/dashboard/summary` | Total wells, active wells, hazards, documents. |
-| `GET` | `/api/corpus` | List every ingested document. |
-| `GET` | `/api/corpus/{corpus_id}` | One document's metadata. |
-| `GET` | `/api/corpus/{corpus_id}/file` | Download the original uploaded PDF. |
-| `DELETE` | `/api/corpus/{corpus_id}` | Delete a document and its extracted data. |
-| `POST` | `/api/upload` | Upload a PDF and start ingestion. |
-| `GET` | `/api/review/{document_id}/pages` | Per-page extraction status for a document. |
-| `GET` | `/api/review/{document_id}/{page_num}` | A page's extracted text, header fields, hazards, rendered HTML. |
-| `GET` | `/api/review/{document_id}/{page_num}/image` | The rasterized page image. |
-| `POST` | `/api/review/{document_id}/{page_num}/correction` | Save a human correction to a page's text. |
-| `GET` | `/api/review/{document_id}/{page_num}/download` | Download a page's current text as `.txt`. |
-| `GET` | `/review/{document_id}` | Standalone server-rendered review tool (outside the React app). |
-| `GET` | `/api/wells` | List every well. |
-| `POST` | `/api/wells` | Add a new well. |
-| `POST` | `/api/wells/compare` | Compare wells. |
-| `POST` | `/api/risk/telemetry` | Offset-well hazard proximity check (position + depth in, nearby hazards out). |
-| `POST` | `/api/chat` | DrillMind's RAG-grounded chat endpoint. |
 
 ## Configuration
 
