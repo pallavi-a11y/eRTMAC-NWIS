@@ -1,6 +1,6 @@
 # eRTMAC-NWIS
 
-**Enhanced Real-Time Monitoring and Analytical Engine — Nearby Well Information System**
+**Enhanced Real-Time Monitoring and Analytical Engine — Nearby Well Intelligence System**
 
 An offline, AI-powered document intelligence system that converts scanned Well Completion Reports
 (WCRs) and drilling records into searchable, structured, hazard-aware data — built for
